@@ -1,3 +1,4 @@
+```
 IPName v1.5 - IPv4 Resolver
 
 Reads IPv4 addresses, networks and hostnames from STDIN, resolves them
@@ -29,3 +30,4 @@ USAGE:
   cat input_file | ipname
   ipname < file.lst
   ipname < file.lst > output.lst
+```
