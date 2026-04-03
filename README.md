@@ -9,7 +9,7 @@ FEATURES:
   - Invalid lines are printed as-is
   - Pure Python WHOIS client (no external whois command required)
   - Uses DNS and WHOIS for resolution only if no comment present (may be slow)
-  - Normalizes subnet masks to CIDR prefix (e.g., /255.255.255.0 → /24)
+  - Normalizes subnet masks to CIDR prefix (e.g., /255.255.255.0 -> /24)
   - Single IP addresses output without /32 prefix
 
 INPUT FORMAT:
