@@ -1,7 +1,7 @@
 ﻿#!/usr/bin/env python3
 
 r"""
-IPName v1.8 - IPv4 Resolver
+IPName v1.9 - IPv4 Resolver
 
 Reads IPv4 addresses, networks and hostnames from STDIN, resolves them
 to 'ip # name' format via DNS and WHOIS lookups, and outputs the list to STDOUT in order of appearance.
@@ -15,10 +15,10 @@ FEATURES:
   - Single IP addresses are output without the /32 suffix
 
 INPUT FORMAT:
-  77.88.55.88               # Single IP address
-  77.88.55.0/24             # Network with CIDR prefix
-  77.88.55.0/255.255.255.0  # Network with subnet mask
-  yandex.ru                 # Hostname
+  77.88.55.88                 Single IP address
+  77.88.55.0/24               Network with CIDR prefix
+  77.88.55.0/255.255.255.0    Network with subnet mask
+  yandex.ru                   Hostname
 
 OUTPUT FORMAT:
   77.88.55.88        # yandex.ru
@@ -29,34 +29,46 @@ OUTPUT FORMAT:
   77.88.55.88        # yandex.ru
 
 USAGE:
-  cat input_file | ipname
-  cat input_file | ipname --resolved-only
-  ipname < file.lst
-  ipname < file.lst > output.lst
+  cat infile.lst | ipname [OPTIONS]
+  ipname [OPTIONS] < infile.lst > outfile.lst
+
+OPTIONS:
+  -r, --resolved-only        Output only successfully resolved entries
+  -w, --resolved-wan-only    Output only public (WAN) resolved entries
+  -l, --resolved-lan-only    Output only private (LAN) resolved entries
 """
 
 import sys
 import re
 import socket
-from ipaddress import ip_network, IPv4Address
+from ipaddress import ip_network, IPv4Address, IPv4Network
 
 
 def main():
     # Парсим аргументы командной строки
-    mode = 'all'  # режим по умолчанию - выводить всё
+    resolved_only = False        # флаг: выводить только отрезолвленные записи
+    resolved_lan_only = False    # флаг: выводить только отрезолвленные записи с адресами из LAN
+    resolved_wan_only = False    # флаг: выводить только отрезолвленные записи с адресами из WAN
     args = sys.argv[1:]
 
     for arg in args:
         if arg in ('-r', '--resolved-only'):
-            mode = 'resolved-only'
+            resolved_only = True
+        elif arg in ('-l', '--resolved-lan-only'):
+            resolved_lan_only = True
+        elif arg in ('-w', '--resolved-wan-only'):
+            resolved_wan_only = True
         elif arg in ('-h', '--help'):
-            print(__doc__)
+            print(__doc__, file=sys.stderr)
             sys.exit(0)
-        elif arg.startswith('-'):
-            sys.stderr.write(f"Unknown option: {arg}\n")
+        else:
+            print(f"Error: Invalid option: {arg}", file=sys.stderr)
             sys.exit(1)
 
-    resolved_only = (mode == 'resolved-only')
+    # Проверка на взаимоисключающие флаги (только один режим может быть активен)
+    if sum([resolved_only, resolved_lan_only, resolved_wan_only]) > 1:
+        print("Error: Options -r, -l and -w are mutually exclusive", file=sys.stderr)
+        sys.exit(1)
 
     # Валидация
     # Проверка: цифра и диапазон 0-255
@@ -206,6 +218,15 @@ def main():
 
         return tok, comment, raw
 
+    # Вспомогательная функция для фильтрации по WAN/LAN
+    def filter_wan_lan(obj):
+        """Проверка: должен ли объект пройти фильтр WAN/LAN"""
+        if resolved_wan_only and not obj.is_global:
+            return False
+        if resolved_lan_only and obj.is_global:
+            return False
+        return True
+
     # Основной цикл обработки stdin
     for line in sys.stdin:
         tok, existing_comment, original = parse_line(line)
@@ -225,14 +246,25 @@ def main():
         if ip_ok(tok):
             resolved = False
             if h := rdns(tok):
-                fmt(normalize_net(tok), h)
-                resolved = True
+                # Фильтрация WAN/LAN для IP
+                try:
+                    ip_obj = IPv4Address(tok)
+                    if filter_wan_lan(ip_obj):
+                        fmt(normalize_net(tok), h)
+                        resolved = True
+                except:
+                    pass
             elif d := whois_desc(tok):
-                fmt(normalize_net(tok), d)
-                resolved = True
+                try:
+                    ip_obj = IPv4Address(tok)
+                    if filter_wan_lan(ip_obj):
+                        fmt(normalize_net(tok), d)
+                        resolved = True
+                except:
+                    pass
             
-            if not resolved and resolved_only:
-                continue  # скрыть нерезолвленные в режиме --resolved-only
+            if not resolved and (resolved_only or resolved_lan_only or resolved_wan_only):
+                continue  # скрыть неотрезолвленные в режимах --resolved-*
             elif not resolved:
                 fmt(normalize_net(tok))  # без комментария
             continue
@@ -240,11 +272,16 @@ def main():
         if net_ok(tok):
             resolved = False
             if d := whois_desc(tok):
-                fmt(normalize_net(tok), d)
-                resolved = True
+                try:
+                    net_obj = IPv4Network(tok, strict=False)
+                    if filter_wan_lan(net_obj):
+                        fmt(normalize_net(tok), d)
+                        resolved = True
+                except:
+                    pass
             
-            if not resolved and resolved_only:
-                continue  # скрыть нерезолвленные в режиме --resolved-only
+            if not resolved and (resolved_only or resolved_lan_only or resolved_wan_only):
+                continue  # скрыть неотрезолвленные в режимах --resolved-*
             elif not resolved:
                 fmt(normalize_net(tok))  # без комментария
             continue
@@ -253,18 +290,24 @@ def main():
             ips = fwd(tok)
             if ips:
                 for ip in ips:
-                    fmt(ip, tok)
+                    # Фильтрация WAN/LAN для IP из хоста
+                    try:
+                        ip_obj = IPv4Address(ip)
+                        if filter_wan_lan(ip_obj):
+                            fmt(ip, tok)
+                    except:
+                        fmt(ip, tok)  # если ошибка валидации - выводим как есть
                 continue
             # Хост не резолвится
-            if resolved_only:
-                continue  # скрыть нерезолвленные в режиме --resolved-only
+            if resolved_only or resolved_lan_only or resolved_wan_only:
+                continue  # скрыть неотрезолвленные в режимах --resolved-*
             else:
                 print(original)  # выводим исходную строку как есть
             continue
 
         # Некорректная строка
-        if resolved_only:
-            continue  # скрыть в режиме --resolved-only
+        if resolved_only or resolved_lan_only or resolved_wan_only:
+            continue  # скрыть неотрезолвленные в режимах --resolved-*
         else:
             print(original)  # выводим как есть
 
