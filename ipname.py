@@ -1,7 +1,7 @@
 ﻿#!/usr/bin/env python3
 
 r"""
-IPName v1.9 - IPv4 Resolver
+IPName v1.10 - IPv4 Resolver
 
 Reads IPv4 addresses, networks and hostnames from STDIN, resolves them
 to 'ip # name' format via DNS and WHOIS lookups, and outputs the list to STDOUT in order of appearance.
@@ -10,7 +10,7 @@ FEATURES:
   - Comments (lines starting with #) are passed through unchanged
   - Unresolved entries are hidden when using the --resolved-only flag
   - Pure Python WHOIS client (no external whois command required)
-  - DNS and WHOIS resolution is performed only when no explicit comment is provided
+  - DNS and WHOIS resolution is performed only when no explicit comment is provided for IPs/networks
   - Normalizes subnet masks to CIDR notation (e.g., /255.255.255.0 -> /24)
   - Single IP addresses are output without the /32 suffix
 
@@ -236,14 +236,13 @@ def main():
             print(original)
             continue
 
-        # Резолв НЕ делаем ТОЛЬКО если есть формат: токен # непустой текст
-        # Во всех остальных случаях - выполняем резолв через DNS/WHOIS
-        if existing_comment:
-            fmt(normalize_net(tok), existing_comment)
-            continue
-
         # Если комментария нет - пробуем резолвить через DNS/WHOIS
         if ip_ok(tok):
+            # IP с комментарием: выводим как есть, резолв НЕ делаем
+            if existing_comment:
+                fmt(normalize_net(tok), existing_comment)
+                continue
+            
             resolved = False
             if h := rdns(tok):
                 # Фильтрация WAN/LAN для IP
@@ -270,6 +269,11 @@ def main():
             continue
 
         if net_ok(tok):
+            # Сеть с комментарием: выводим как есть, резолв НЕ делаем
+            if existing_comment:
+                fmt(normalize_net(tok), existing_comment)
+                continue
+            
             resolved = False
             if d := whois_desc(tok):
                 try:
@@ -287,6 +291,7 @@ def main():
             continue
 
         if host_ok(tok):
+            # Хостнеймы РЕЗОЛВИМ ВСЕГДА, даже если есть комментарий
             ips = fwd(tok)
             if ips:
                 for ip in ips:
