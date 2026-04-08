@@ -1,5 +1,5 @@
 ```
-IPName v1.9 - IPv4 Resolver
+IPName v1.10 - IPv4 Resolver
 
 Reads IPv4 addresses, networks and hostnames from STDIN, resolves them
 to 'ip # name' format via DNS and WHOIS lookups, and outputs the list to STDOUT in order of appearance.
@@ -8,7 +8,7 @@ FEATURES:
   - Comments (lines starting with #) are passed through unchanged
   - Unresolved entries are hidden when using the --resolved-only flag
   - Pure Python WHOIS client (no external whois command required)
-  - DNS and WHOIS resolution is performed only when no explicit comment is provided
+  - DNS and WHOIS resolution is performed only when no explicit comment is provided for IPs/networks
   - Normalizes subnet masks to CIDR notation (e.g., /255.255.255.0 -> /24)
   - Single IP addresses are output without the /32 suffix
 
