@@ -189,10 +189,10 @@ def main():
                 sys.exit(1)
         elif arg in ('-r', '--resolved-only'):
             resolved_only = True
-        elif arg in ('-l', '--resolved-lan-only'):
-            resolved_lan_only = True
         elif arg in ('-w', '--resolved-wan-only'):
             resolved_wan_only = True
+        elif arg in ('-l', '--resolved-lan-only'):
+            resolved_lan_only = True
         elif arg in ('-h', '--help'):
             print(__doc__, file=sys.stderr)
             sys.exit(0)
