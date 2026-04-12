@@ -1,8 +1,9 @@
 ```
-IPName v1.11 - IPv4 Resolver
+IPName v1.12 - IPv4 Resolver
 
-Reads IPv4 addresses, networks and hostnames from STDIN, resolves them
-to 'ip # name' format via DNS and WHOIS lookups, and outputs the list to STDOUT in order of appearance.
+Reads IPv4 addresses, networks and hostnames from STDIN, resolves them to
+'ip # name' format via DNS and WHOIS lookups, and outputs the list to STDOUT
+in order of appearance.
 
 FEATURES:
   - Comments (lines starting with #) are passed through unchanged
