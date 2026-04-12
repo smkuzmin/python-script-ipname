@@ -1,10 +1,11 @@
 ﻿#!/usr/bin/env python3
 
 r"""
-IPName v1.11 - IPv4 Resolver
+IPName v1.12 - IPv4 Resolver
 
-Reads IPv4 addresses, networks and hostnames from STDIN, resolves them
-to 'ip # name' format via DNS and WHOIS lookups, and outputs the list to STDOUT in order of appearance.
+Reads IPv4 addresses, networks and hostnames from STDIN, resolves them to
+'ip # name' format via DNS and WHOIS lookups, and outputs the list to STDOUT
+in order of appearance.
 
 FEATURES:
   - Comments (lines starting with #) are passed through unchanged
@@ -45,9 +46,12 @@ import struct
 import random
 from ipaddress import ip_network, IPv4Address, IPv4Network
 
+# Константы
+RESOLVE_TIMEOUT = 5  # Таймаут одного DNS-запроса, секунды
+
 
 # Минимальный DNS-клиент (чистый Python, без зависимостей)
-def _dns_query(qname, qtype, nameservers, timeout=3):
+def _dns_query(qname, qtype, nameservers, timeout=RESOLVE_TIMEOUT):
     """
     Отправить DNS-запрос к указанным серверам.
     qtype: 1 = A, 12 = PTR
@@ -79,7 +83,7 @@ def _dns_query(qname, qtype, nameservers, timeout=3):
             # Пропускаем заголовок и вопрос
             offset = 12  # заголовок
             # Пропускаем вопрос
-            while data[offset] != 0:
+            while offset < len(data) and data[offset] != 0:
                 offset += data[offset] + 1
             offset += 5  # null-байт + 2 байта тип + 2 байта класс
             
@@ -88,7 +92,7 @@ def _dns_query(qname, qtype, nameservers, timeout=3):
             ancount = struct.unpack('>H', data[6:8])[0]
             for _ in range(ancount):
                 # Пропускаем имя (может быть сжатие)
-                while True:
+                while offset < len(data):
                     if offset >= len(data):
                         break
                     length = data[offset]
@@ -114,9 +118,7 @@ def _dns_query(qname, qtype, nameservers, timeout=3):
                     # Парсим доменное имя в ответе
                     rdata_offset = offset
                     name_parts = []
-                    while True:
-                        if rdata_offset >= len(data):
-                            break
+                    while rdata_offset < len(data):
                         length = data[rdata_offset]
                         if length == 0:
                             break
@@ -138,7 +140,6 @@ def _dns_query(qname, qtype, nameservers, timeout=3):
             continue
     return None
 
-
 def _rdns_custom(ip, nameservers, short=False):
     """Обратный DNS через кастомные сервера (PTR-запрос)"""
     # Формируем reverse-имя: 1.2.3.4 -> 4.3.2.1.in-addr.arpa
@@ -149,7 +150,6 @@ def _rdns_custom(ip, nameservers, short=False):
         return h.split('.')[0] if short else h
     return None
 
-
 def _fwd_custom(host, nameservers):
     """Прямой DNS через кастомные сервера (A-запрос)"""
     results = _dns_query(host, 1, nameservers)  # 1 = A
@@ -159,30 +159,25 @@ def _fwd_custom(host, nameservers):
 
 def main():
     # Парсим аргументы командной строки
+    custom_dns = None            # список кастомных DNS-серверов
     resolved_only = False        # флаг: выводить только отрезолвленные записи
     resolved_lan_only = False    # флаг: выводить только отрезолвленные записи с адресами из LAN
     resolved_wan_only = False    # флаг: выводить только отрезолвленные записи с адресами из WAN
-    custom_dns = None            # список кастомных DNS-серверов
+
     args = sys.argv[1:]
 
     # Используем while-цикл для поддержки аргументов вида "-d 8.8.8.8" (через пробел)
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg in ('-r', '--resolved-only'):
-            resolved_only = True
-        elif arg in ('-l', '--resolved-lan-only'):
-            resolved_lan_only = True
-        elif arg in ('-w', '--resolved-wan-only'):
-            resolved_wan_only = True
-        elif arg == '-d':
+        if arg == '-d':
             # Формат через пробел: -d 8.8.8.8,1.1.1.1
             if i + 1 < len(args):
                 i += 1
                 servers = args[i]
                 custom_dns = [s.strip() for s in servers.split(',') if s.strip()]
             else:
-                print("Error: Option -d requires a server argument", file=sys.stderr)
+                print("Error: Option -d requires a value", file=sys.stderr)
                 sys.exit(1)
         elif arg.startswith('--dns='):
             # Формат через знак равно: --dns=8.8.8.8,1.1.1.1
@@ -190,8 +185,14 @@ def main():
             if servers:
                 custom_dns = [s.strip() for s in servers.split(',') if s.strip()]
             else:
-                print("Error: Option --dns requires a server value", file=sys.stderr)
+                print("Error: Option --dns requires a value", file=sys.stderr)
                 sys.exit(1)
+        elif arg in ('-r', '--resolved-only'):
+            resolved_only = True
+        elif arg in ('-l', '--resolved-lan-only'):
+            resolved_lan_only = True
+        elif arg in ('-w', '--resolved-wan-only'):
+            resolved_wan_only = True
         elif arg in ('-h', '--help'):
             print(__doc__, file=sys.stderr)
             sys.exit(0)
