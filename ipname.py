@@ -61,15 +61,15 @@ def _dns_query(qname, qtype, nameservers, timeout=RESOLVE_TIMEOUT):
     txn_id = random.randint(0, 65535)
     flags = 0x0100  # стандартный рекурсивный запрос
     header = struct.pack('>HHHHHH', txn_id, flags, 1, 0, 0, 0)
-    
+
     # Формируем вопрос
     question = b''
     for label in qname.rstrip('.').split('.'):
         question += bytes([len(label)]) + label.encode('ascii')
     question += b'\x00' + struct.pack('>HH', qtype, 1)  # тип, класс=IN
-    
+
     packet = header + question
-    
+
     # Пробуем сервера по очереди
     for ns in nameservers:
         try:
@@ -78,7 +78,7 @@ def _dns_query(qname, qtype, nameservers, timeout=RESOLVE_TIMEOUT):
             sock.sendto(packet, (ns, 53))
             data, _ = sock.recvfrom(512)  # UDP-ответ обычно <=512 байт
             sock.close()
-            
+
             # Парсим ответ (минимально: только ответы на наш вопрос)
             # Пропускаем заголовок и вопрос
             offset = 12  # заголовок
@@ -86,7 +86,7 @@ def _dns_query(qname, qtype, nameservers, timeout=RESOLVE_TIMEOUT):
             while offset < len(data) and data[offset] != 0:
                 offset += data[offset] + 1
             offset += 5  # null-байт + 2 байта тип + 2 байта класс
-            
+
             # Читаем ответы
             answers = []
             ancount = struct.unpack('>H', data[6:8])[0]
@@ -104,12 +104,12 @@ def _dns_query(qname, qtype, nameservers, timeout=RESOLVE_TIMEOUT):
                         break
                     else:
                         offset += length + 1
-                
+
                 if offset + 10 > len(data):
                     break
                 atype, aclass, ttl, rdlen = struct.unpack('>HHIH', data[offset:offset+10])
                 offset += 10
-                
+
                 if atype == 1 and qtype == 1:  # A-запись
                     if rdlen == 4:
                         ip = '.'.join(str(b) for b in data[offset:offset+4])
@@ -131,9 +131,9 @@ def _dns_query(qname, qtype, nameservers, timeout=RESOLVE_TIMEOUT):
                             rdata_offset += length
                     if name_parts:
                         answers.append('.'.join(name_parts).rstrip('.').lower())
-                
+
                 offset += rdlen
-            
+
             if answers:
                 return answers
         except:
@@ -398,7 +398,7 @@ def main():
             if existing_comment:
                 fmt(normalize_net(tok), existing_comment)
                 continue
-            
+
             resolved = False
             if h := rdns(tok):
                 # Фильтрация WAN/LAN для IP
@@ -417,7 +417,7 @@ def main():
                         resolved = True
                 except:
                     pass
-            
+
             if not resolved and (resolved_only or resolved_lan_only or resolved_wan_only):
                 continue  # скрыть неотрезолвленные в режимах --resolved-*
             elif not resolved:
@@ -429,7 +429,7 @@ def main():
             if existing_comment:
                 fmt(normalize_net(tok), existing_comment)
                 continue
-            
+
             resolved = False
             if d := whois_desc(tok):
                 try:
@@ -439,7 +439,7 @@ def main():
                         resolved = True
                 except:
                     pass
-            
+
             if not resolved and (resolved_only or resolved_lan_only or resolved_wan_only):
                 continue  # скрыть неотрезолвленные в режимах --resolved-*
             elif not resolved:
